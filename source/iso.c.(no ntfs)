@@ -937,7 +937,7 @@ static int iso_parse_param_sfo(char * file, char *title_id, char *title_name)
 
 static int calc_entries(char *path, int parent)
 {
-    //DIR  *dir;
+    DIR  *dir;
     int len_string;
     struct stat s;
 
@@ -986,8 +986,7 @@ static int calc_entries(char *path, int parent)
     int len = strlen(path);
 
     // calc folders, subfolders, multi-part files & files
-    // dir = opendir(path);
-    DIR_ITER *dir; dir = ps3ntfs_diropen(path);
+    dir = opendir(path);
     if(dir)
     {
         int l = len + 1;
@@ -996,40 +995,39 @@ static int calc_entries(char *path, int parent)
         // files & multi-part files
         while(true)
         {
-            //struct dirent *entry = readdir(dir);
-            sysFSDirent entry; entry.d_name[0]=0; if(ps3ntfs_dirnext(dir, entry.d_name, &s) != SUCCESS) break;
+            struct dirent *entry = readdir(dir);
 
-            if(!entry.d_name[0]) break;
-            if(entry.d_name[0] == '.' && (entry.d_name[1] == '.' || entry.d_name[1] == 0)) continue;
+            if(!entry || !entry->d_name[0]) break;
+            if(entry->d_name[0] == '.' && (entry->d_name[1] == '.' || entry->d_name[1] == 0)) continue;
 
-            if(get_input_abort()) {ps3ntfs_dirclose(dir); return ERROR_ABORTED_BY_USER;}
+            if(get_input_abort()) {closedir(dir); return ERROR_ABORTED_BY_USER;}
 
             nentries++;
             if(nentries >= progress) {DPrintf(pcount ? "." : ">> Still reading... Please wait ."); pcount++; progress = nentries + 100;}
 
             path[l] = 0;
-            strcat(path, entry.d_name);
+            strcat(path, entry->d_name);
 
-            //if(ps3ntfs_stat(path, &s) != SUCCESS) {ps3ntfs_dirclose(dir); DPrintf("Not found: %s\n", path); path[len] = 0; return ERROR_INPUT_FILE_NOT_EXISTS;}
+            if(stat(path, &s) != SUCCESS) {closedir(dir); DPrintf("Not found: %s\n", path); path[len] = 0; return ERROR_INPUT_FILE_NOT_EXISTS;}
 
-            is_dir_entry = entry.d_type & IS_DIRECTORY;
+            is_dir_entry = entry->d_type & IS_DIRECTORY;
 
             if(is_dir_entry) {nfolders++; continue;}
 
-            int lname = strlen(entry.d_name);
+            int lname = strlen(entry->d_name);
 
-            if(lname >= 6 && !strncmp(&entry.d_name[lname - 6], ".66600", 6))
+            if(lname >= 6 && !strncmp(&entry->d_name[lname - 6], ".66600", 6))
             {
                 lname -= 6;
-                if(lname > 222) {ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(lname > 222) {closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
-                memcpy(temp_string, entry.d_name, lname);
+                memcpy(temp_string, entry->d_name, lname);
                 temp_string[lname] = 0;
 
                 // check multi-part file name length
                 UTF8_to_UTF16((u8 *) temp_string, wstring);
                 for(len_string = lname; len_string < 225; len_string++) if(wstring[len_string] == 0) break;
-                if(len_string > 222) {ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(len_string > 222) {closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
                 // build size of .666xx files
                 u64 size = s.st_size;
@@ -1039,27 +1037,27 @@ static int calc_entries(char *path, int parent)
                 for(int n = 1; n < 100; n++)
                 {
                     path[l] = 0;
-                    memcpy(path + l, entry.d_name, lname);
+                    memcpy(path + l, entry->d_name, lname);
 
                     sprintf(&path[l + lname], ".666%2.2u", n);
 
-                    if(ps3ntfs_stat(path, &s) != SUCCESS) {s.st_size = size; break;}
+                    if(stat(path, &s) != SUCCESS) {s.st_size = size; break;}
 
                     size += s.st_size;
                 }
 
                 path[l] = 0;
             }
-            else if(lname >= 6 && !strncmp(&entry.d_name[lname - 6], ".666", 4)) continue; // ignore .666xx files
+            else if(lname >= 6 && !strncmp(&entry->d_name[lname - 6], ".666", 4)) continue; // ignore .666xx files
 
             else
             {
-                if(lname > 222) {path[len] = 0; ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(lname > 222) {path[len] = 0; closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
                 // check file name length
-                UTF8_to_UTF16((u8 *) entry.d_name, wstring);
+                UTF8_to_UTF16((u8 *) entry->d_name, wstring);
                 for(len_string = lname; len_string < 225; len_string++) if(wstring[len_string] == 0) break;
-                if(len_string > 222) {ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(len_string > 222) {closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
                 nfiles++;
             }
@@ -1098,7 +1096,7 @@ static int calc_entries(char *path, int parent)
             }
         }
 
-        ps3ntfs_dirclose (dir);
+        closedir (dir);
         path[len] = 0;
 
         // directories
@@ -1106,8 +1104,7 @@ static int calc_entries(char *path, int parent)
         {
             mfolders = nfolders; nentries = 0; progress = 100;
 
-            //dir = opendir(path);
-            dir = ps3ntfs_diropen(path);
+            dir = opendir(path);
             if(dir)
             {
                 int l = len + 1;
@@ -1115,31 +1112,30 @@ static int calc_entries(char *path, int parent)
 
                 while(true)
                 {
-                    //struct dirent *entry = readdir (dir);
-                    sysFSDirent entry; entry.d_name[0]=0; if(ps3ntfs_dirnext(dir, entry.d_name, &s) != SUCCESS) break;
+                    struct dirent *entry = readdir (dir);
 
-                    if(!entry.d_name[0]) break;
-                    if(entry.d_name[0] == '.' && (entry.d_name[1] == '.' || entry.d_name[1] == 0)) continue;
+                    if(!entry || !entry->d_name[0]) break;
+                    if(entry->d_name[0] == '.' && (entry->d_name[1] == '.' || entry->d_name[1] == 0)) continue;
 
-                    if(get_input_abort()) {ps3ntfs_dirclose(dir); return ERROR_ABORTED_BY_USER;}
+                    if(get_input_abort()) {closedir(dir); return ERROR_ABORTED_BY_USER;}
 
                     nentries++;
                     if(nentries >= progress) {DPrintf("."); pcount++; progress = nentries + 100;}
 
                     path[l] = 0;
-                    strcat(path, entry.d_name);
+                    strcat(path, entry->d_name);
 
-                    is_dir_entry = entry.d_type & IS_DIRECTORY;
+                    is_dir_entry = entry->d_type & IS_DIRECTORY;
 
                     if(is_dir_entry)
                     {
-                        int lname = strlen(entry.d_name);
-                        if(lname > 222) {ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                        int lname = strlen(entry->d_name);
+                        if(lname > 222) {closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
                         // check directory name length
-                        UTF8_to_UTF16((u8 *) entry.d_name, wstring);
+                        UTF8_to_UTF16((u8 *) entry->d_name, wstring);
                         for(len_string = lname; len_string < 225; len_string++) if(wstring[len_string] == 0) break;
-                        if(len_string > 222) {ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                        if(len_string > 222) {closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
                         lpath += sizeof(struct iso_path_table) + lname - 1;
                         lpath += (lpath & 1);
@@ -1180,7 +1176,7 @@ static int calc_entries(char *path, int parent)
                     }
                 }
 
-                ps3ntfs_dirclose (dir);
+                closedir (dir);
             }
             path[len] = 0;
 
@@ -1190,8 +1186,7 @@ static int calc_entries(char *path, int parent)
 
 
             // directories (recursive add)
-            //dir = opendir(path);
-            dir = ps3ntfs_diropen(path);
+            dir = opendir(path);
             if(dir)
             {
                 mfolders = nfolders; nentries = 0; progress = 100; pcount = 0;
@@ -1201,38 +1196,37 @@ static int calc_entries(char *path, int parent)
 
                 while(true)
                 {
-                    //struct dirent *entry = readdir(dir);
-                    sysFSDirent entry; entry.d_name[0]=0; if(ps3ntfs_dirnext(dir, entry.d_name, &s) != SUCCESS) break;
+                    struct dirent *entry = readdir(dir);
 
-                    if(!entry.d_name[0]) break;
-                    if(entry.d_name[0] == '.' && (entry.d_name[1] == '.' || entry.d_name[1] == 0)) continue;
+                    if(!entry || !entry->d_name[0]) break;
+                    if(entry->d_name[0] == '.' && (entry->d_name[1] == '.' || entry->d_name[1] == 0)) continue;
 
-                    if(get_input_abort()) {ps3ntfs_dirclose(dir); return ERROR_ABORTED_BY_USER;}
+                    if(get_input_abort()) {closedir(dir); return ERROR_ABORTED_BY_USER;}
 
                     nentries++;
                     if(nentries >= progress) {DPrintf("."); pcount++; progress = nentries + 100;}
 
                     path[l] = 0;
-                    strcat(path, entry.d_name);
+                    strcat(path, entry->d_name);
 
-                    is_dir_entry = entry.d_type & IS_DIRECTORY;
+                    is_dir_entry = entry->d_type & IS_DIRECTORY;
 
                     if(!is_dir_entry) continue;
 
                     DPrintf("%s\n", path);
 
-                    directory_iso[cur_isop].name = malloc(strlen(entry.d_name) + 1);
-                    if(!directory_iso[cur_isop].name) {ps3ntfs_dirclose(dir); return FAILED;}
-                    strcpy(directory_iso[cur_isop].name, entry.d_name);
+                    directory_iso[cur_isop].name = malloc(strlen(entry->d_name) + 1);
+                    if(!directory_iso[cur_isop].name) {closedir(dir); return FAILED;}
+                    strcpy(directory_iso[cur_isop].name, entry->d_name);
 
                     int ret = calc_entries(path, cur2 + 1);
 
-                    if(ret < 0) {ps3ntfs_dirclose(dir); return ret;}
+                    if(ret < 0) {closedir(dir); return ret;}
 
                     mfolders--;
                     if(mfolders <= 0) break;
                 }
-                ps3ntfs_dirclose (dir);
+                closedir (dir);
             }
             path[len] = 0;
         }
@@ -1354,8 +1348,8 @@ static int fill_dirpath(void)
             pos_wpath1 += sizeof(struct iso_path_table) - 1 + 1;
             pos_wpath1 += pos_wpath1 & 1;
             iptw1 = (void *) &sectors[pos_wpath1];
-
             continue;
+
         }
 
         //////
@@ -1396,7 +1390,9 @@ static int fill_dirpath(void)
         pos_wpath1 += sizeof(struct iso_path_table) - 1 + len_string * 2;
         pos_wpath1 += pos_wpath1 & 1;
         iptw1 = (void *) &sectors[pos_wpath1];
+
         //////
+
     }
 
     return SUCCESS;
@@ -1404,7 +1400,7 @@ static int fill_dirpath(void)
 
 static int fill_entries(char *path1, char *path2, int level)
 {
-    //DIR  *dir;
+    DIR  *dir;
 
     int n;
     int len_string;
@@ -1445,7 +1441,7 @@ static int fill_entries(char *path1, char *path2, int level)
 
     //DPrintf("q %s LBA %X\n", path2, directory_iso[level].llba);
 
-    if(ps3ntfs_stat(path1, &s) != SUCCESS) {DPrintf("Not found: %s\n", path1); return ERROR_INPUT_FILE_NOT_EXISTS;}
+    if(stat(path1, &s) != SUCCESS) {DPrintf("Not found: %s\n", path1); return ERROR_INPUT_FILE_NOT_EXISTS;}
 
     tm = localtime(&s.st_mtime);
     dd = tm->tm_mday;
@@ -1491,7 +1487,7 @@ static int fill_entries(char *path1, char *path2, int level)
     {
         int len = strlen(path1);
         strcat(path1,"/..");
-        if(ps3ntfs_stat(path1, &s) != SUCCESS) {DPrintf("Not found: %s\n", path1); return ERROR_INPUT_FILE_NOT_EXISTS;}
+        if(stat(path1, &s) != SUCCESS) {DPrintf("Not found: %s\n", path1); return ERROR_INPUT_FILE_NOT_EXISTS;}
         path1[len] = 0;
 
         tm = localtime(&s.st_mtime);
@@ -1535,8 +1531,7 @@ static int fill_entries(char *path1, char *path2, int level)
     DPrintf("%s\n", path1);
 
     // files
-    //dir = opendir(path1);
-    DIR_ITER *dir; dir = ps3ntfs_diropen(path1);
+    dir = opendir(path1);
     if(dir)
     {
         int l = len + 1;
@@ -1544,39 +1539,38 @@ static int fill_entries(char *path1, char *path2, int level)
 
         while(true)
         {
-            //struct dirent *entry = readdir (dir);
-            sysFSDirent entry; entry.d_name[0]=0; if(ps3ntfs_dirnext(dir, entry.d_name, &s) != SUCCESS) break;
+            struct dirent *entry = readdir (dir);
 
-            if(!entry.d_name[0]) break;
-            if(entry.d_name[0] == '.' && (entry.d_name[1] == '.' || entry.d_name[1] == 0)) continue;
+            if(!entry || !entry->d_name[0]) break;
+            if(entry->d_name[0] == '.' && (entry->d_name[1] == '.' || entry->d_name[1] == 0)) continue;
 
-            if(get_input_abort()) {ps3ntfs_dirclose(dir); return ERROR_ABORTED_BY_USER;}
+            if(get_input_abort()) {closedir(dir); return ERROR_ABORTED_BY_USER;}
 
             #ifdef NOPS3_UPDATE
-            if(l >= 11 && !strcmp(&path1[l - 11], "PS3_UPDATE/")) continue;
+            if(l>=11 && !strcmp(&path1[l - 11], "PS3_UPDATE/")) continue;
             #endif
 
             path1[l] = 0;
-            strcat(path1, entry.d_name);
+            strcat(path1, entry->d_name);
 
-            //if(ps3ntfs_stat(path1, &s) != SUCCESS) {ps3ntfs_dirclose(dir); DPrintf("Not found: %s\n", path1); path1[len] = 0; return ERROR_INPUT_FILE_NOT_EXISTS;}
+            //if(stat(path1, &s) != SUCCESS) {closedir(dir); DPrintf("Not found: %s\n", path1); path1[len] = 0; return ERROR_INPUT_FILE_NOT_EXISTS;}
 
             if(S_ISDIR(s.st_mode)) continue;
 
-            int lname = strlen(entry.d_name);
+            int lname = strlen(entry->d_name);
 
-            if(lname >= 6 && !strcmp(&entry.d_name[lname -6], ".66600"))
+            if(lname >= 6 && !strcmp(&entry->d_name[lname -6], ".66600"))
             {
                 lname -= 6;
-                if(lname > 222) {ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(lname > 222) {closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
-                memcpy(temp_string, entry.d_name, lname);
+                memcpy(temp_string, entry->d_name, lname);
                 temp_string[lname] = 0;
 
                 // check multi-part file name length
                 UTF8_to_UTF16((u8 *) temp_string, wstring);
                 for(len_string = lname; len_string < 225; len_string++) if(wstring[len_string] == 0) break;
-                if(len_string > 222) {ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(len_string > 222) {closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
                 // build size of .666xx files
                 u64 size = s.st_size;
@@ -1585,27 +1579,27 @@ static int fill_entries(char *path1, char *path2, int level)
                 for(int n = 1; n < 100; n++)
                 {
                     path1[l] = 0;
-                    memcpy(path1 + l, entry.d_name, lname);
+                    memcpy(path1 + l, entry->d_name, lname);
 
                     sprintf(&path1[l + lname], ".666%2.2u", n);
 
-                    if(ps3ntfs_stat(path1, &s) != SUCCESS) {s.st_size = size; break;}
+                    if(stat(path1, &s) != SUCCESS) {s.st_size = size; break;}
 
                     size += s.st_size;
                 }
 
                 path1[len] = 0;
             }
-            else if(lname >= 6 && !strncmp(&entry.d_name[lname -6], ".666", 4)) continue; // ignore .666xx files
+            else if(lname >= 6 && !strncmp(&entry->d_name[lname -6], ".666", 4)) continue; // ignore .666xx files
 
             else
             {
-                if(lname > 222) {path1[len] = 0; ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(lname > 222) {path1[len] = 0; closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
                 // check file name length
-                UTF8_to_UTF16((u8 *) entry.d_name, wstring);
+                UTF8_to_UTF16((u8 *) entry->d_name, wstring);
                 for(len_string = lname; len_string < 225; len_string++) if(wstring[len_string] == 0) break;
-                if(len_string > 222) {ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(len_string > 222) {closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
             }
 
 
@@ -1648,13 +1642,13 @@ static int fill_entries(char *path1, char *path2, int level)
 
                 if(cldir > SECTOR_SIZE)
                 {
-                    //DPrintf("gapl1 lba 0x%X %s/%s %i\n", directory_iso[level].llba, path1, entry.d_name, cldir);
+                    //DPrintf("gapl1 lba 0x%X %s/%s %i\n", directory_iso[level].llba, path1, entry->d_name, cldir);
                     //getchar();
 
                     count_sec1++;
                     if(count_sec1 > max_sec1)
                     {
-                        ps3ntfs_dirclose (dir);
+                        closedir (dir);
                         DPrintf("ERROR: too much entries in directory:\n%s\n", path1);
                         return ERROR_TOO_MUCH_DIR_ENTRIES;
                     }
@@ -1670,14 +1664,14 @@ static int fill_entries(char *path1, char *path2, int level)
                 set733((void *) idrl->extent, flba);
                 set733((void *) idrl->size, fsize);
 
-                //DPrintf("a %i/%i/%i %i:%i:%i %s LBA: %X\n", dd, mm, aa, ho, mi, se, entry.d_name, flba);
+                //DPrintf("a %i/%i/%i %i:%i:%i %s LBA: %X\n", dd, mm, aa, ho, mi, se, entry->d_name, flba);
                 setdaterec(idrl->date, dd, mm, aa, ho, mi, se);
                 idrl->flags[0] = ((n + 1) != parts) ? 0x80 : 0x0; // fichero
                 idrl->file_unit_size[0] = 0x0;
                 idrl->interleave[0] = 0x0;
                 set723(idrl->volume_sequence_number, 1);
                 idrl->name_len[0] = lname + 2;
-                memcapscpy(idrl->name, entry.d_name, lname);
+                memcapscpy(idrl->name, entry->d_name, lname);
                 idrl->name[lname + 0] = ';';
                 idrl->name[lname + 1] = '1';
                 idrl = (void *) ((char *) idrl) + idrl->length[0];
@@ -1695,12 +1689,12 @@ static int fill_entries(char *path1, char *path2, int level)
 
                 if(cwdir > SECTOR_SIZE)
                 {
-                    DPrintf("gapw1 lba 0x%X %s/%s %i\n", directory_iso[level].wlba, path1, entry.d_name, cwdir);
+                    //DPrintf("gapw1 lba 0x%X %s/%s %i\n", directory_iso[level].wlba, path1, entry->d_name, cwdir);
                     //getchar();
 
                     count_sec2++;
                     if(count_sec2 > max_sec2) {
-                        ps3ntfs_dirclose (dir);
+                        closedir (dir);
                         DPrintf("ERROR: too much entries in directory:\n%s\n", path1);
                         return ERROR_TOO_MUCH_DIR_ENTRIES;
                     }
@@ -1731,9 +1725,10 @@ static int fill_entries(char *path1, char *path2, int level)
 
                 flba+= ((fsize + SECTOR_FILL) & ~SECTOR_FILL) / SECTOR_SIZE;
             }
+
         }
 
-        ps3ntfs_dirclose (dir);
+        closedir (dir);
     }
     path1[len] = 0;
 
@@ -1748,7 +1743,7 @@ static int fill_entries(char *path1, char *path2, int level)
             path1[l] = 0;
             strcat(path1, directory_iso[n].name);
 
-            if(ps3ntfs_stat(path1, &s) != SUCCESS) {DPrintf("Not found: %s\n", path1); path1[len] = 0; return ERROR_INPUT_FILE_NOT_EXISTS;}
+            if(stat(path1, &s) != SUCCESS) {DPrintf("Not found: %s\n", path1); path1[len] = 0; return ERROR_INPUT_FILE_NOT_EXISTS;}
 
             tm = localtime(&s.st_mtime);
             dd = tm->tm_mday;
@@ -1779,7 +1774,7 @@ static int fill_entries(char *path1, char *path2, int level)
                 count_sec1++;
                 if(count_sec1 > max_sec1)
                 {
-                    ps3ntfs_dirclose (dir);
+                    closedir (dir);
                     DPrintf("ERROR: too much entries in directory:\n%s\n", path1);
                     return ERROR_TOO_MUCH_DIR_ENTRIES;
                 }
@@ -1825,7 +1820,7 @@ static int fill_entries(char *path1, char *path2, int level)
                 count_sec2++;
                 if(count_sec2 > max_sec2)
                 {
-                    ps3ntfs_dirclose (dir);
+                    closedir (dir);
                     DPrintf("ERROR: too much entries in directory:\n%s\n", path1);
                     return ERROR_TOO_MUCH_DIR_ENTRIES;
                 }
@@ -2020,7 +2015,7 @@ static int write_split(int *fd, u32 lba, u8 *mem, int sectors, int sel)
 
 static int build_file_iso(int *fd, char *path1, char *path2, int level)
 {
-    //DIR  *dir;
+    DIR  *dir;
     struct stat s;
 
     int n;
@@ -2051,8 +2046,7 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
     int len = strlen(path1);
 
     // files
-    //dir = opendir(path1);
-    DIR_ITER *dir; dir = ps3ntfs_diropen(path1);
+    dir = opendir(path1);
     if(dir)
     {
         int l = len + 1;
@@ -2060,37 +2054,36 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
 
         while(true)
         {
-            //struct dirent *entry = readdir (dir);
-            sysFSDirent entry; entry.d_name[0]=0; if(ps3ntfs_dirnext(dir, entry.d_name, &s) != SUCCESS) break;
+            struct dirent *entry = readdir (dir);
 
-            if(!entry.d_name[0]) break;
-            if(entry.d_name[0] == '.' && (entry.d_name[1] == '.' || entry.d_name[1] == 0)) continue;
+            if(!entry || !entry->d_name[0]) break;
+            if(entry->d_name[0] == '.' && (entry->d_name[1] == '.' || entry->d_name[1] == 0)) continue;
 
-            if(get_input_abort()) {ps3ntfs_dirclose(dir); return ERROR_ABORTED_BY_USER;}
+            if(get_input_abort()) {closedir(dir); return ERROR_ABORTED_BY_USER;}
 
             #ifdef NOPS3_UPDATE
-            if(l >= 11 && !strcmp(&path1[l - 11], "PS3_UPDATE/")) continue;
+            if(l>=11 && !strcmp(&path1[l - 11], "PS3_UPDATE/")) continue;
             #endif
 
             path1[l] = 0;
-            strcat(path1, entry.d_name);
+            strcat(path1, entry->d_name);
 
-            //if(ps3ntfs_stat(path1, &s) != SUCCESS) {ps3ntfs_dirclose(dir); DPrintf("Not found: %s\n", path1); path1[len] = 0; return ERROR_INPUT_FILE_NOT_EXISTS;}
+            if(stat(path1, &s) != SUCCESS) {closedir(dir); DPrintf("Not found: %s\n", path1); path1[len] = 0; return ERROR_INPUT_FILE_NOT_EXISTS;}
 
             if(S_ISDIR(s.st_mode)) continue;
 
             int is_file_split = 0;
 
-            int lname = strlen(entry.d_name);
+            int lname = strlen(entry->d_name);
 
-            if(lname >= 6 && !strcmp(&entry.d_name[lname -6], ".66600"))
+            if(lname >= 6 && !strcmp(&entry->d_name[lname -6], ".66600"))
             {
                 lname -= 6;
-                if(lname > 222) {path1[len] = 0; ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(lname > 222) {path1[len] = 0; closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
 
                 is_file_split = 1;
 
-                memcpy(temp_string, entry.d_name, lname);
+                memcpy(temp_string, entry->d_name, lname);
                 temp_string[lname] = 0;
 
                 // build size of .666xx files
@@ -2100,30 +2093,30 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
                 for(int n = 1; n < 100; n++)
                 {
                     path1[l] = 0;
-                    memcpy(path1 + l, entry.d_name, lname);
+                    memcpy(path1 + l, entry->d_name, lname);
 
                     sprintf(&path1[l + lname], ".666%2.2u", n);
 
-                    if(ps3ntfs_stat(path1, &s) != SUCCESS) {s.st_size = size; break;}
+                    if(stat(path1, &s) != SUCCESS) {s.st_size = size; break;}
 
                     size += s.st_size;
                 }
 
                 path1[l] = 0;
-                strcat(path1, entry.d_name); // restore .66600 file
+                strcat(path1, entry->d_name); // restore .66600 file
             }
-            else if(lname >= 6 && !strncmp(&entry.d_name[lname -6], ".666", 4)) continue; // ignore .666xx files
+            else if(lname >= 6 && !strncmp(&entry->d_name[lname -6], ".666", 4)) continue; // ignore .666xx files
 
             else
             {
-                if(lname > 222) {path1[len] = 0; ps3ntfs_dirclose(dir); return ERROR_FILE_NAME_TOO_LONG;}
+                if(lname > 222) {path1[len] = 0; closedir(dir); return ERROR_FILE_NAME_TOO_LONG;}
             }
 
 
             int  fd2 = ps3ntfs_open(path1, O_RDONLY, 0766);
             path1[l] = 0;
 
-            if(fd2 < 0) {ps3ntfs_dirclose(dir); return ERROR_OPENING_INPUT_FILE;}
+            if(fd2 < 0) {closedir(dir); return ERROR_OPENING_INPUT_FILE;}
 
             u32 flba0 = flba;
 
@@ -2150,7 +2143,7 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
                     int ret = write_split(fd, flba + z, sectors, f2, 1);
                     if(ret < 0)
                     {
-                        ps3ntfs_close(fd2); ps3ntfs_dirclose(dir); return ret;
+                        ps3ntfs_close(fd2); closedir(dir); return ret;
                     }
 
                     f -= f2;
@@ -2173,11 +2166,11 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
             else
             {
                 if(s.st_size < 1024ULL)
-                    DPrintf("  -> %s LBA %u size %u Bytes\n", entry.d_name, flba, (u32) s.st_size);
+                    DPrintf("  -> %s LBA %u size %u Bytes\n", entry->d_name, flba, (u32) s.st_size);
                 else if(s.st_size < 0x100000LL)
-                    DPrintf("  -> %s LBA %u size %u KB\n", entry.d_name, flba, (u32) (s.st_size/1024));
+                    DPrintf("  -> %s LBA %u size %u KB\n", entry->d_name, flba, (u32) (s.st_size/1024));
                 else
-                    DPrintf("  -> %s LBA %u size %u MB\n", entry.d_name, flba, (u32) (s.st_size/0x100000LL));
+                    DPrintf("  -> %s LBA %u size %u MB\n", entry->d_name, flba, (u32) (s.st_size/0x100000LL));
             }
 
             u32 count = 0, percent = (u32) (s.st_size / 0x40000ULL);
@@ -2191,7 +2184,7 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
 
             if(get_input_abort())
             {
-                ps3ntfs_close(fd2); ps3ntfs_dirclose(dir); return ERROR_ABORTED_BY_USER;
+                ps3ntfs_close(fd2); closedir(dir); return ERROR_ABORTED_BY_USER;
             }
 
             while(s.st_size > 0)
@@ -2211,7 +2204,7 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
 
                     if(get_input_abort())
                     {
-                        ps3ntfs_close(fd2); ps3ntfs_dirclose(dir); return ERROR_ABORTED_BY_USER;
+                        ps3ntfs_close(fd2); closedir(dir); return ERROR_ABORTED_BY_USER;
                     }
                 }
 
@@ -2227,14 +2220,14 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
                     int read = ps3ntfs_read(fd2, (void *) sectors, (int) fsize);
                     if(read < 0)
                     {
-                        ps3ntfs_close(fd2); ps3ntfs_dirclose(dir); return ERROR_READING_INPUT_FILE;
+                        ps3ntfs_close(fd2); closedir(dir); return ERROR_READING_INPUT_FILE;
                     }
                     else if(read < fsize)
                     {
                         ps3ntfs_close(fd2);
 
                         path1[l] = 0;
-                        memcpy(path1 + l, entry.d_name, lname);
+                        memcpy(path1 + l, entry->d_name, lname);
 
                         sprintf(&path1[l + lname], ".666%2.2u", is_file_split);
                         //DPrintf("split: %s\n", path1);
@@ -2243,18 +2236,18 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
                         fd2 = ps3ntfs_open(path1, O_RDONLY, 0766);
                         path1[len] = 0;
 
-                        if(fd2 < 0) {ps3ntfs_dirclose(dir); return ERROR_OPENING_INPUT_FILE;}
+                        if(fd2 < 0) {closedir(dir); return ERROR_OPENING_INPUT_FILE;}
 
                         if(ps3ntfs_read(fd2, (void *) (sectors + read), (int) (fsize - read)) != (fsize - read))
                         {
-                            ps3ntfs_close(fd2); ps3ntfs_dirclose(dir); return ERROR_READING_INPUT_FILE;
+                            ps3ntfs_close(fd2); closedir(dir); return ERROR_READING_INPUT_FILE;
                         }
                     }
 
                 }
                 else if(ps3ntfs_read(fd2, (void *) sectors, (int) fsize) != fsize)
                 {
-                    ps3ntfs_close(fd2); ps3ntfs_dirclose(dir); return ERROR_READING_INPUT_FILE;
+                    ps3ntfs_close(fd2); closedir(dir); return ERROR_READING_INPUT_FILE;
                 }
 
                 lsize = (fsize + SECTOR_FILL) & ~SECTOR_FILL;
@@ -2264,7 +2257,7 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
                 if(ret < 0)
                 {
                     DPrintf("\n");
-                    ps3ntfs_close(fd2); ps3ntfs_dirclose(dir); return ret;
+                    ps3ntfs_close(fd2); closedir(dir); return ret;
                 }
 
                 flba += lsize / SECTOR_SIZE;
@@ -2280,7 +2273,7 @@ static int build_file_iso(int *fd, char *path1, char *path2, int level)
             ps3ntfs_close(fd2);
         }
 
-        ps3ntfs_dirclose (dir);
+        closedir (dir);
     }
 
     path1[len1] = 0;
@@ -2430,7 +2423,7 @@ int makeps3iso(char *g_path, char *f_iso, int split)
 
     fixpath(path1);
 
-    if(ps3ntfs_stat(path1, &s) < 0 || !(S_ISDIR(s.st_mode)))
+    if(stat(path1, &s) < 0 || !(S_ISDIR(s.st_mode)))
     {
         DPrintf("ERROR: Invalid Path!\n");
         press_button_to_continue();
@@ -2480,7 +2473,7 @@ int makeps3iso(char *g_path, char *f_iso, int split)
     else
     {
 
-         if(ps3ntfs_stat(output_name, &s) == 0 && (S_ISDIR(s.st_mode)))
+         if(stat(output_name, &s) == 0 && (S_ISDIR(s.st_mode)))
          {
             strcat(output_name, "/"); strcat(output_name, path2);
          }
@@ -2495,7 +2488,7 @@ int makeps3iso(char *g_path, char *f_iso, int split)
     }
 
 
-    if(!ps3ntfs_stat(output_name, &s))
+    if(!stat(output_name, &s))
     {
         DPrintf("\n%s\nFile Exists. Do you want to Overwrite it? (CROSS - Yes/ TRIANGLE - No):\n", output_name);
 
@@ -3145,7 +3138,7 @@ int extractps3iso(char *f_iso, char *g_path, int split)
     if(n >= 4 && !strcasecmp(&path1[n - 4], ".iso"))
     {
         sprintf(split_file[0].path, "%s", path1);
-        if(ps3ntfs_stat(split_file[0].path, &s)<0)
+        if(stat(split_file[0].path, &s)<0)
         {
             free(split_file); split_file = NULL;
             DPrintf("Error: ISO file don't exists!\n");
@@ -3165,7 +3158,7 @@ int extractps3iso(char *f_iso, char *g_path, int split)
             strcpy(string2, path1);
             string2[n - 2] = 0;
             sprintf(split_file[m].path, "%s.%i", string2, m);
-            if(ps3ntfs_stat(split_file[m].path, &s)<0) break;
+            if(stat(split_file[m].path, &s)<0) break;
             split_file[m].size = s.st_size;
         }
 
@@ -3194,7 +3187,7 @@ int extractps3iso(char *f_iso, char *g_path, int split)
         press_button_to_continue();
         return FAILED;
     }
-    else if(ps3ntfs_stat(path2, &s) == 0)
+    else if(stat(path2, &s) == 0)
     {
         strcat(path2, "/");
 
@@ -4029,7 +4022,7 @@ int patchps3iso(char *f_iso, int nopause)
     if(n >= 4 && !strcasecmp(&path1[n - 4], ".iso"))
     {
         sprintf(split_file[0].path, "%s", path1);
-        if(ps3ntfs_stat(split_file[0].path, &s)<0)
+        if(stat(split_file[0].path, &s)<0)
         {
             free(split_file); split_file = NULL;
             DPrintf("Error: ISO file don't exists!\n");
@@ -4049,7 +4042,7 @@ int patchps3iso(char *f_iso, int nopause)
             strcpy(string2, path1);
             string2[n - 2] = 0;
             sprintf(split_file[m].path, "%s.%i", string2, m);
-            if(ps3ntfs_stat(split_file[m].path, &s)<0) break;
+            if(stat(split_file[m].path, &s)<0) break;
             split_file[m].size = s.st_size;
         }
 
