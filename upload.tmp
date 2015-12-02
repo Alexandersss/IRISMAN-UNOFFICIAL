@@ -1,0 +1,7 @@
+open ps3
+root
+root
+bin
+cd /dev_hdd0/game/IRISMAN00/USRDIR
+put RELOAD.SELF
+quit

@@ -11,6 +11,7 @@
  * Evilnat
  * Joonie
  * Aldostools
+ * Smhabib
  * Alexander
  *
  * This program is free software; you can redistribute it and/or modify
@@ -257,10 +258,9 @@ void load_payload_355deh(int mode)
 
 			pokeq(0x8000000000059CC8ULL, 0x419E00D860000000ULL ); // Original: 0x419E00D8419D00C0ULL
 			pokeq(0x8000000000059CD0ULL, 0x2F84000448000098ULL ); // Original: 0x2F840004409C0048ULL //PATCH_JUMP
-
+    */
 
 			pokeq(0x8000000000253700ULL, 0x38600000F8690000ULL ); // fix 0x8001002B / 80010017 errors (2015-01-03)
-	*/
 
 
     /* BASIC PATCHES SYS36 */
@@ -283,7 +283,7 @@ void load_payload_355deh(int mode)
         +002c3cf0  f8 01 00 b0 7c 9c 23 78  4b d4 01 88 4b d8 aa 1d  |....|.#xK...K...| (openhook jump - 0x3E80)
     */
 
-    PATCH_JUMP(0x059D24, 0x59C30);
+    PATCH_JUMP(0x2E3218, (PAYLOAD_OFFSET+0x30));
 
 #ifdef CONFIG_USE_SYS8PERMH4
     PATCH_JUMP(PERMS_OFFSET, (PAYLOAD_OFFSET+0x18));
@@ -376,7 +376,6 @@ static int lv2_patch_storage_355deh(void)
         return -1;
     }
 
-	// LV1 Offsets
     //search bin "5F 6F 66 5F 70 72 6F 64  75 63 74 5F 6D 6F 64 65" to find
     // LV2 enable syscall storage
     save_lv2_storage_patch= peekq(0x8000000000318008ULL);
@@ -390,17 +389,17 @@ static int lv2_patch_storage_355deh(void)
 
     regs_i.reg3 = 0x1773dc; regs_i.reg4 = 0x7f85e37838600001ULL;
     regs_i.reg11 = 0xB6;
-    sys8_lv1_syscall(&regs_i, &regs_o); save_lv1_storage_patches[0]= regs_o.reg4;
+    sys8_lv1_syscall(&regs_i, &regs_o); save_lv1_storage_patches[1]= regs_o.reg4;
     regs_i.reg11 = 0xB7; sys8_lv1_syscall(&regs_i, &regs_o);
 
     regs_i.reg3 = 0x177454; regs_i.reg4 = 0x7f84e3783be00001ULL;
     regs_i.reg11 = 0xB6;
-    sys8_lv1_syscall(&regs_i, &regs_o); save_lv1_storage_patches[0]= regs_o.reg4;
+    sys8_lv1_syscall(&regs_i, &regs_o); save_lv1_storage_patches[2]= regs_o.reg4;
     regs_i.reg11 = 0xB7; sys8_lv1_syscall(&regs_i, &regs_o);
 
     regs_i.reg3 = 0x17745c; regs_i.reg4 = 0x9be1007038600000ULL;
     regs_i.reg11 = 0xB6;
-    sys8_lv1_syscall(&regs_i, &regs_o); save_lv1_storage_patches[0]= regs_o.reg4;
+    sys8_lv1_syscall(&regs_i, &regs_o); save_lv1_storage_patches[3]= regs_o.reg4;
     regs_i.reg11 = 0xB7; sys8_lv1_syscall(&regs_i, &regs_o);
 	
 
@@ -415,7 +414,6 @@ static int lv2_unpatch_storage_355deh(void)
 
     if(!is_patched) return -1;
 
-	// LV1 Offsets
     //search bin "5F 6F 66 5F 70 72 6F 64  75 63 74 5F 6D 6F 64 65" to find
     // LV2 disable syscall storage
     pokeq(0x8000000000318008ULL, save_lv2_storage_patch); 

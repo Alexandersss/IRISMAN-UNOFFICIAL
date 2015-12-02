@@ -135,7 +135,9 @@ extern int bk_picture;
 #define BLINK       0x10
 #define BLINK_SLOW  0x20
 
+#define MOVIAN   "/dev_hdd0/game/HTSS00003/USRDIR/movian.self"
 #define SHOWTIME "/dev_hdd0/game/HTSS00003/USRDIR/showtime.self"
+
 
 ////////////////
 int pos1 = 0;
@@ -4016,6 +4018,15 @@ void launch_showtime(bool playmode)
         exit(0);
     }
 
+    if(file_exists(MOVIAN))
+    {
+        fun_exit();
+        SaveGameList();
+
+        sysProcessExitSpawn2((const char*)MOVIAN, NULL, NULL, NULL, 0, 3071, SYS_PROCESS_SPAWN_STACK_SIZE_1M);
+        exit(0);
+    }
+
     if(file_exists(SHOWTIME))
     {
         fun_exit();
@@ -4189,12 +4200,12 @@ mount_iso: ;
             type = mtype;
             is_ps2_game = (type == EMU_PS2_DVD);
         }
-        else if(strstr(path, "/PS3ISO/"))  type = EMU_PS3;
-        else if(strstr(path, "/PS2ISO/")) {type = EMU_PS2_DVD; is_ps2_game = 1;}
-        else if(strstr(path, "/PSPISO/"))  type = EMU_PSP;
-        else if(strstr(path, "/PSXISO/"))  type = EMU_PSX;
-        else if(strstr(path, "/DVDISO/"))  type = EMU_DVD;
-        else if(strstr(path, "/BDISO/"))   type = EMU_BD;
+        else if(strstr(path, "/PS3ISO"))  type = EMU_PS3;
+        else if(strstr(path, "/PS2ISO")) {type = EMU_PS2_DVD; is_ps2_game = 1;}
+        else if(strstr(path, "/PSPISO"))  type = EMU_PSP;
+        else if(strstr(path, "/PSXISO"))  type = EMU_PSX;
+        else if(strstr(path, "/DVDISO"))  type = EMU_DVD;
+        else if(strstr(path, "/BDISO"))   type = EMU_BD;
         else
         {
             FILE *fp = NULL;
@@ -4451,12 +4462,12 @@ int launch_iso_game_mamba(char *path, int mtype)
             type = mtype;
             is_ps2_game = (type == EMU_PS2_DVD);
         }
-        else if(strstr(path, "/PS3ISO/"))  type = EMU_PS3;
-        else if(strstr(path, "/PS2ISO/")) {type = EMU_PS2_DVD; is_ps2_game = 1;}
-        else if(strstr(path, "/PSPISO/"))  type = EMU_PSP;
-        else if(strstr(path, "/PSXISO/"))  type = EMU_PSX;
-        else if(strstr(path, "/DVDISO/"))  type = EMU_DVD;
-        else if(strstr(path, "/BDISO/"))   type = EMU_BD;
+        else if(strstr(path, "/PS3ISO"))  type = EMU_PS3;
+        else if(strstr(path, "/PS2ISO")) {type = EMU_PS2_DVD; is_ps2_game = 1;}
+        else if(strstr(path, "/PSPISO"))  type = EMU_PSP;
+        else if(strstr(path, "/PSXISO"))  type = EMU_PSX;
+        else if(strstr(path, "/DVDISO"))  type = EMU_DVD;
+        else if(strstr(path, "/BDISO"))   type = EMU_BD;
         else
         {
             FILE *fp = NULL;
@@ -6521,12 +6532,12 @@ int file_manager(char *pathw1, char *pathw2)
                 {
                     if(exit_option == 1)
                     {
-                        if(DrawDialogYesNo("Exit to XMB?") == YES) {fun_exit(); SaveGameList(); exit(0);}
+                        if(DrawDialogYesNo("Exit to XMB?") == YES) {unlink_secure("/dev_hdd0/tmp/wm_request"); fun_exit(); SaveGameList(); exit(0);}
                     }
                     else
                     if(exit_option == 2)
                     {
-                        if(DrawDialogYesNo("Restart the PS3?") == YES) {fun_exit(); set_install_pkg = true; SaveGameList(); sys_reboot();}
+                        if(DrawDialogYesNo("Restart the PS3?") == YES) {unlink_secure("/dev_hdd0/tmp/wm_request"); fun_exit(); set_install_pkg = true; SaveGameList(); sys_reboot();}
                     }
                     else
                     {
@@ -7150,7 +7161,7 @@ int file_manager(char *pathw1, char *pathw2)
                  }
 
                  //else if(use_cobra && !((!fm_pane && (entries1[sel1].d_type & IS_DIRECTORY)) || (fm_pane && (entries2[sel2].d_type & IS_DIRECTORY))))
-                 else if((!fm_pane && is_ntfs_path(path1)) || ( fm_pane && use_cobra && is_ntfs_path(path2)))
+                 else if(use_cobra && ( (!fm_pane && is_ntfs_path(path1)) || (fm_pane && is_ntfs_path(path2)) ))
                  {
                      sprintf(TEMP_PATH1, "%s/USRDIR/TEMP/pkg.iso", self_path);
 
@@ -7597,6 +7608,7 @@ int file_manager(char *pathw1, char *pathw2)
                         sprintf(TEMP_PATH, "%s/%s", path1, entries1[sel1].d_name);
 
                         bool reboot=false; int size; char *boot_plugins = LoadFile("/dev_hdd0/boot_plugins.txt", &size);
+                        unlink_secure("/dev_hdd0/tmp/wm_request");
 
                         if(size>=36 && strstr(boot_plugins, "/dev_hdd0/plugins/webftp_server.sprx")!=NULL)
                         {
@@ -8193,6 +8205,7 @@ int file_manager(char *pathw1, char *pathw2)
                         sprintf(TEMP_PATH, "%s/%s", path2, entries2[sel2].d_name);
 
                         bool reboot=false; int size; char *boot_plugins = LoadFile("/dev_hdd0/boot_plugins.txt", &size);
+                        unlink_secure("/dev_hdd0/tmp/wm_request");
 
                         if(size>=36 && strstr(boot_plugins, "/dev_hdd0/plugins/webftp_server.sprx")!=NULL)
                         {
